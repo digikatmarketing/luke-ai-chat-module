@@ -1,0 +1,165 @@
+[
+  {
+    "id": "luke-agent-id",
+    "name": "agent_id",
+    "label": "ElevenLabs Agent ID",
+    "required": true,
+    "locked": false,
+    "allow_new_line": false,
+    "type": "text",
+    "display_width": null,
+    "default": "agent_01jypdbjt8evp9qh9wvydcsqs3",
+    "help_text": "The ElevenLabs Conversational AI agent ID. Find this in your ElevenLabs dashboard under Agents.",
+    "tab": "CONTENT"
+  },
+  {
+    "id": "luke-avatar-image",
+    "name": "avatar_image",
+    "label": "Luke Avatar Image",
+    "required": false,
+    "locked": false,
+    "type": "image",
+    "display_width": null,
+    "default": {
+      "src": "",
+      "alt": "Luke - AI Health Assistant",
+      "width": 200,
+      "height": 200
+    },
+    "help_text": "Luke's face image for the floating button and chat widget. Recommended 200x200px. If empty, uses the bundled default.",
+    "tab": "CONTENT"
+  },
+  {
+    "id": "luke-greeting-text",
+    "name": "greeting_text",
+    "label": "Default Greeting",
+    "required": false,
+    "locked": false,
+    "allow_new_line": false,
+    "type": "text",
+    "display_width": null,
+    "default": "Hey {name}, I'm Luke. I can answer any questions you have about Primal Zone and the services we offer, but cannot provide Medical advice. What brings you here today?",
+    "help_text": "The first message Luke says when chat opens. Use {name} as a placeholder for the visitor's first name (removed automatically if unknown).",
+    "tab": "CONTENT"
+  },
+  {
+    "id": "luke-tooltip-text",
+    "name": "tooltip_text",
+    "label": "Button Tooltip",
+    "required": false,
+    "locked": false,
+    "allow_new_line": false,
+    "type": "text",
+    "display_width": null,
+    "default": "Talk to Luke",
+    "help_text": "Tooltip shown on hover over the floating button.",
+    "tab": "CONTENT"
+  },
+  {
+    "id": "luke-settings-group",
+    "name": "settings",
+    "label": "Widget Settings",
+    "required": false,
+    "locked": false,
+    "children": [
+      {
+        "id": "luke-orb-color-1",
+        "name": "orb_color_1",
+        "label": "Orb Gradient Start",
+        "required": false,
+        "locked": false,
+        "type": "color",
+        "display_width": null,
+        "default": {
+          "color": "#4B6EFF",
+          "opacity": 100
+        }
+      },
+      {
+        "id": "luke-orb-color-2",
+        "name": "orb_color_2",
+        "label": "Orb Gradient End",
+        "required": false,
+        "locked": false,
+        "type": "color",
+        "display_width": null,
+        "default": {
+          "color": "#8C68FF",
+          "opacity": 100
+        }
+      },
+      {
+        "id": "luke-enable-voice",
+        "name": "enable_voice",
+        "label": "Enable Voice Mode",
+        "required": false,
+        "locked": false,
+        "type": "boolean",
+        "display_width": null,
+        "default": true,
+        "help_text": "When disabled, Luke operates in text-only mode (no microphone required)."
+      },
+      {
+        "id": "luke-show-on-mobile",
+        "name": "show_on_mobile",
+        "label": "Show on Mobile",
+        "required": false,
+        "locked": false,
+        "type": "boolean",
+        "display_width": null,
+        "default": true,
+        "help_text": "Show the Luke AI button on mobile devices."
+      }
+    ],
+    "tab": "CONTENT",
+    "expanded": false,
+    "type": "group",
+    "display_width": null,
+    "default": {
+      "orb_color_1": { "color": "#4B6EFF", "opacity": 100 },
+      "orb_color_2": { "color": "#8C68FF", "opacity": 100 },
+      "enable_voice": true,
+      "show_on_mobile": true
+    }
+  },
+  {
+    "id": "luke-advanced-group",
+    "name": "advanced",
+    "label": "Advanced",
+    "required": false,
+    "locked": false,
+    "children": [
+      {
+        "id": "luke-widget-version",
+        "name": "widget_version",
+        "label": "Widget Embed Version",
+        "required": false,
+        "locked": false,
+        "allow_new_line": false,
+        "type": "text",
+        "display_width": null,
+        "default": "0.3.0",
+        "help_text": "Pin the @elevenlabs/convai-widget-embed CDN version. Change only if upgrading."
+      },
+      {
+        "id": "luke-debug-mode",
+        "name": "debug_mode",
+        "label": "Debug Mode",
+        "required": false,
+        "locked": false,
+        "type": "boolean",
+        "display_width": null,
+        "default": false,
+        "help_text": "Enable console logging for troubleshooting. Also activatable via ?debugLuke=1 URL parameter."
+      }
+    ],
+    "tab": "CONTENT",
+    "expanded": false,
+    "type": "group",
+    "display_width": null,
+    "default": {
+      "widget_version": "0.3.0",
+      "debug_mode": false
+    }
+  }
+]

@@ -1,0 +1,470 @@
+{# =============================================================================
+  Luke AI Chat Assistant — ElevenLabs Conversational AI Widget
+  - Custom floating action button (Luke's face with animated glow ring)
+  - Lazy-loads @elevenlabs/convai-widget-embed on first click
+  - Personalisation via HubSpot contact.firstname (identified visitors)
+  - Voice + text chat via ElevenLabs agent
+  - Debug mode via ?debugLuke=1 or module field
+============================================================================= #}
+
+{% set pz_id = "luke-ai-chat-" ~ name|replace(' ', '-')|replace('.', '-')|lower %}
+
+{# === Personalisation: extract contact name if visitor is identified === #}
+{% set visitor_name = contact.firstname|default("") %}
+{% set visitor_email = contact.email|default("") %}
+
+{# Build the greeting with name substitution #}
+{% set greeting = module.greeting_text|default("Hey there, I'm Luke. I can answer any questions you have about Primal Zone and the services we offer, but cannot provide Medical advice. What brings you here today?") %}
+{% if visitor_name %}
+  {% set greeting = greeting|replace("{name}", visitor_name) %}
+{% else %}
+  {# Strip {name} patterns gracefully for anonymous visitors #}
+  {% set greeting = greeting|replace("{name}, ", "")|replace("{name} ", "")|replace("{name}", "") %}
+  {# Also clean up "Hey , " → "Hey, " if name was at start #}
+  {% set greeting = greeting|replace("Hey , ", "Hey, ")|replace("Hey  ", "Hey ") %}
+{% endif %}
+
+{# Module-level image fallback: use uploaded image or theme default #}
+{% set luke_image_src = module.avatar_image.src %}
+{% if not luke_image_src %}
+  {% set luke_image_src = get_asset_url("./images/luke-avatar.png") %}
+{% endif %}
+
+{# Settings (grouped fields) #}
+{% set orb_color_1 = module.settings.orb_color_1.color|default("#4B6EFF") %}
+{% set orb_color_2 = module.settings.orb_color_2.color|default("#8C68FF") %}
+{% set enable_voice = module.settings.enable_voice|default(true) %}
+{% set show_on_mobile = module.settings.show_on_mobile|default(true) %}
+{% set widget_version = module.advanced.widget_version|default("0.3.0") %}
+{% set debug_mode = module.advanced.debug_mode|default(false) %}
+
+{# ========================= CSS ========================= #}
+{% require_css %}
+<style>
+  {% scope_css %}
+
+  /* === Floating Action Button Container === */
+  .luke-ai-wrap {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 9999;
+  }
+
+  .luke-fab {
+    position: relative;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(0, 0, 0, 0.22);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.45),
+      inset 0 1px 0 rgba(255, 255, 255, 0.10);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.3s ease;
+  }
+
+  .luke-fab:hover {
+    transform: scale(1.08);
+    box-shadow:
+      0 12px 40px rgba(75, 110, 255, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  }
+
+  .luke-fab:active {
+    transform: scale(0.96);
+  }
+
+  .luke-fab:focus-visible {
+    outline: 2px solid #4B6EFF;
+    outline-offset: 3px;
+  }
+
+  /* Animated glow ring behind the button */
+  .luke-fab__ring {
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    background: conic-gradient(
+      from 0deg,
+      {{ orb_color_1 }},
+      {{ orb_color_2 }},
+      {{ orb_color_1 }}
+    );
+    opacity: 0.6;
+    z-index: -1;
+    animation: luke-ring-spin 3s linear infinite;
+  }
+
+  @keyframes luke-ring-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* Pulse glow effect */
+  .luke-fab::before {
+    content: "";
+    position: absolute;
+    inset: -8px;
+    border-radius: 50%;
+    background: radial-gradient(
+      circle,
+      rgba(75, 110, 255, 0.25) 0%,
+      transparent 70%
+    );
+    animation: luke-pulse 2s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  @keyframes luke-pulse {
+    0%, 100% { transform: scale(1); opacity: 0.5; }
+    50% { transform: scale(1.15); opacity: 0.8; }
+  }
+
+  /* Avatar image */
+  .luke-fab__avatar {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    object-fit: cover;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Tooltip (left of button) */
+  .luke-fab__tooltip {
+    position: absolute;
+    right: calc(100% + 12px);
+    top: 50%;
+    transform: translateY(-50%);
+    white-space: nowrap;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+
+  .luke-fab:hover .luke-fab__tooltip {
+    opacity: 1;
+  }
+
+  /* Hide glow when widget is active */
+  .luke-fab.is-active .luke-fab__ring,
+  .luke-fab.is-active::before {
+    animation: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .luke-fab.is-active {
+    opacity: 0.6;
+    transform: scale(0.9);
+  }
+
+  /* === Mobile responsive === */
+  @media (max-width: 767px) {
+    .luke-ai-wrap {
+      bottom: 16px;
+      right: 16px;
+    }
+    .luke-fab {
+      width: 56px;
+      height: 56px;
+    }
+    .luke-fab__avatar {
+      width: 48px;
+      height: 48px;
+    }
+    .luke-fab__tooltip {
+      display: none;
+    }
+  }
+
+  /* === Hide on mobile (if configured) === */
+  {% if not show_on_mobile %}
+  @media (max-width: 767px) {
+    .luke-ai-wrap {
+      display: none !important;
+    }
+  }
+  {% endif %}
+
+  /* === Debug panel === */
+  .luke-debug {
+    display: none;
+    position: fixed;
+    left: 12px;
+    bottom: 12px;
+    max-width: 420px;
+    padding: 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(0, 0, 0, 0.75);
+    color: #fff;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 11px;
+    z-index: 10000;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    max-height: 300px;
+    overflow: auto;
+  }
+  .luke-debug.is-on { display: block; }
+  .luke-debug pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    opacity: 0.95;
+  }
+
+  {% end_scope_css %}
+</style>
+{% end_require_css %}
+
+{# ========================= HTML ========================= #}
+<div id="{{ pz_id }}"
+     class="luke-ai-wrap"
+     data-agent-id="{{ module.agent_id }}"
+     data-avatar-url="{{ luke_image_src }}"
+     data-orb-color-1="{{ orb_color_1 }}"
+     data-orb-color-2="{{ orb_color_2 }}"
+     data-greeting="{{ greeting|e }}"
+     data-enable-voice="{{ enable_voice|lower }}"
+     data-widget-version="{{ widget_version }}"
+     data-visitor-name="{{ visitor_name|e }}"
+     data-visitor-email="{{ visitor_email|e }}"
+     aria-label="Luke AI Chat Assistant">
+
+  {# Floating Action Button #}
+  <button type="button"
+          class="luke-fab"
+          data-luke-fab
+          aria-label="{{ module.tooltip_text|default('Talk to Luke') }}"
+          title="{{ module.tooltip_text|default('Talk to Luke') }}">
+    <span class="luke-fab__ring" aria-hidden="true"></span>
+    <img src="{{ luke_image_src }}"
+         alt="Luke - AI Health Assistant"
+         class="luke-fab__avatar"
+         width="56"
+         height="56"
+         loading="lazy" />
+    <span class="luke-fab__tooltip">{{ module.tooltip_text|default("Talk to Luke") }}</span>
+  </button>
+
+  {# ElevenLabs widget will be injected here dynamically by JS #}
+
+  {# Debug panel #}
+  <div class="luke-debug" data-debug>
+    <strong>[LUKE-AI] Debug</strong>
+    <pre data-debug-log>Waiting for click…</pre>
+  </div>
+</div>
+
+{# ========================= JS ========================= #}
+{% require_js position="footer" %}
+<script>
+(function(){
+  /* ── Root element ──────────────────────────────────────── */
+  var root = document.getElementById("{{ pz_id }}");
+  if (!root) return;
+
+  /* ── Config from data attributes ───────────────────────── */
+  var CFG = {
+    agentId:      root.getAttribute("data-agent-id") || "",
+    avatarUrl:    root.getAttribute("data-avatar-url") || "",
+    orbColor1:    root.getAttribute("data-orb-color-1") || "#4B6EFF",
+    orbColor2:    root.getAttribute("data-orb-color-2") || "#8C68FF",
+    greeting:     root.getAttribute("data-greeting") || "",
+    enableVoice:  root.getAttribute("data-enable-voice") === "true",
+    widgetVer:    root.getAttribute("data-widget-version") || "0.3.0",
+    visitorName:  root.getAttribute("data-visitor-name") || "",
+    visitorEmail: root.getAttribute("data-visitor-email") || ""
+  };
+
+  /* ── Debug ─────────────────────────────────────────────── */
+  var qs = new URLSearchParams(window.location.search);
+  var DEBUG = {{ debug_mode|lower }} || qs.has("debugLuke");
+
+  var debugWrap = root.querySelector("[data-debug]");
+  var debugPre  = root.querySelector("[data-debug-log]");
+
+  if (DEBUG && debugWrap) debugWrap.classList.add("is-on");
+
+  function log(msg, obj) {
+    if (!DEBUG) return;
+    var time = new Date().toISOString().slice(11, 19);
+    var line = obj ? time + "  " + msg + "  " + JSON.stringify(obj) : time + "  " + msg;
+    console.log("[LUKE-AI]", msg, obj || "");
+    if (debugPre) {
+      debugPre.textContent = (debugPre.textContent ? debugPre.textContent + "\n" : "") + line;
+    }
+  }
+
+  /* ── Validate config ───────────────────────────────────── */
+  if (!CFG.agentId) {
+    log("ERROR: No agent ID configured. Luke AI will not function.");
+    return;
+  }
+
+  /* ── State ─────────────────────────────────────────────── */
+  var state = {
+    scriptLoaded: false,
+    widgetCreated: false,
+    widgetEl: null
+  };
+
+  /* ── DOM references ────────────────────────────────────── */
+  var fab = root.querySelector("[data-luke-fab]");
+  if (!fab) return;
+
+  /* ── Lazy-load ElevenLabs widget embed script ──────────── */
+  function ensureWidgetScript(callback) {
+    if (state.scriptLoaded) {
+      callback && callback();
+      return;
+    }
+
+    /* Check if already loaded by another instance */
+    if (window.customElements && window.customElements.get("elevenlabs-convai")) {
+      log("Widget custom element already registered");
+      state.scriptLoaded = true;
+      callback && callback();
+      return;
+    }
+
+    var src = "https://unpkg.com/@elevenlabs/convai-widget-embed@" + CFG.widgetVer;
+    var s = document.createElement("script");
+    s.src = src;
+    s.async = true;
+
+    s.onload = function() {
+      log("Widget embed script loaded", { src: src });
+      state.scriptLoaded = true;
+      callback && callback();
+    };
+
+    s.onerror = function() {
+      log("ERROR: Failed to load widget embed script", { src: src });
+    };
+
+    document.body.appendChild(s);
+    log("Injecting widget embed script", { src: src });
+  }
+
+  /* ── Create the ElevenLabs widget element ──────────────── */
+  function createWidget() {
+    if (state.widgetCreated) return;
+
+    var el = document.createElement("elevenlabs-convai");
+
+    /* Core config */
+    el.setAttribute("agent-id", CFG.agentId);
+
+    /* Avatar customisation */
+    if (CFG.avatarUrl) {
+      el.setAttribute("avatar-image-url", CFG.avatarUrl);
+    }
+    el.setAttribute("avatar-orb-color-1", CFG.orbColor1);
+    el.setAttribute("avatar-orb-color-2", CFG.orbColor2);
+
+    /* Personalised first message */
+    if (CFG.greeting) {
+      el.setAttribute("override-first-message", CFG.greeting);
+    }
+
+    /* Dynamic variables for the agent's system prompt */
+    var dynVars = {};
+    if (CFG.visitorName) dynVars.user_name = CFG.visitorName;
+    if (CFG.visitorEmail) dynVars.user_email = CFG.visitorEmail;
+    if (Object.keys(dynVars).length > 0) {
+      el.setAttribute("dynamic-variables", JSON.stringify(dynVars));
+    }
+
+    /* Listen for call events (for future client tools like navigation) */
+    el.addEventListener("elevenlabs-convai:call", function(evt) {
+      log("elevenlabs-convai:call fired", evt.detail);
+
+      /* Handle client tool calls for navigation */
+      if (evt.detail && evt.detail.tool_name) {
+        var toolName = evt.detail.tool_name;
+        if (toolName === "navigateToGetStarted") {
+          window.location.href = "https://www.primalzone.com/get-started#signup-form";
+        } else if (toolName === "navigateToBookCall") {
+          window.location.href = "https://www.primalzone.com/#talk-to-us";
+        } else if (toolName === "navigateToBloodTestMen") {
+          window.location.href = "https://imedical.com.au/order/blood-tests/Primal-Zone-Panel-1&tracking=65ea48fc259cf";
+        } else if (toolName === "navigateToBloodTestWomen") {
+          window.location.href = "https://imedical.com.au/order/blood-tests/Primal-Zone-Female-Panel&tracking=65ea48fc259cf";
+        }
+      }
+    });
+
+    /* Listen for open/close to update FAB state */
+    el.addEventListener("elevenlabs-convai:open", function() {
+      fab.classList.add("is-active");
+      log("Widget opened");
+    });
+
+    el.addEventListener("elevenlabs-convai:close", function() {
+      fab.classList.remove("is-active");
+      log("Widget closed");
+    });
+
+    root.appendChild(el);
+    state.widgetCreated = true;
+    state.widgetEl = el;
+    log("Widget element created and appended", {
+      agentId: CFG.agentId,
+      hasName: !!CFG.visitorName,
+      voiceEnabled: CFG.enableVoice
+    });
+  }
+
+  /* ── FAB click handler ─────────────────────────────────── */
+  fab.addEventListener("click", function() {
+    log("FAB clicked");
+
+    if (state.widgetCreated) {
+      /* Widget already exists — toggle it */
+      if (state.widgetEl) {
+        /* Try to programmatically open/close via the widget API */
+        log("Widget already created, re-clicking should toggle via widget UI");
+      }
+      return;
+    }
+
+    /* First click: lazy-load the script, then create widget */
+    ensureWidgetScript(function() {
+      /* Short delay for custom element registration */
+      setTimeout(function() {
+        createWidget();
+      }, 150);
+    });
+  });
+
+  /* ── Init ──────────────────────────────────────────────── */
+  log("Luke AI module initialized", {
+    agentId: CFG.agentId.slice(0, 12) + "…",
+    hasVisitorName: !!CFG.visitorName,
+    enableVoice: CFG.enableVoice,
+    widgetVer: CFG.widgetVer
+  });
+
+})();
+</script>
+{% end_require_js %}
