@@ -1,13 +1,27 @@
 {# =============================================================================
   Luke AI Chat Assistant — ElevenLabs Conversational AI Widget
-  - Custom floating action button (Luke's face with animated glow ring)
-  - Lazy-loads @elevenlabs/convai-widget-embed on first click
-  - Personalisation via HubSpot contact.firstname (identified visitors)
-  - Voice + text chat via ElevenLabs agent
-  - Debug mode via ?debugLuke=1 or module field
+  ─────────────────────────────────────────────────────────────────────────────
+  HEADLESS MODULE — no floating button. Instead, any element on the page can
+  trigger Luke's chat by adding:
+
+    data-luke-trigger            opens voice + text chat (default)
+    data-luke-trigger="text"     opens text-only chat
+
+  Examples:
+    <button data-luke-trigger>Talk to Luke</button>
+    <a href="#" data-luke-trigger="text">Chat with Luke</a>
+    <div class="hero-cta" data-luke-trigger>Ask Luke a question</div>
+
+  The module itself renders as a hidden config container. It lazy-loads the
+  ElevenLabs widget embed script only when a trigger is first clicked.
+
+  Personalisation: HubSpot contact.firstname is injected into the greeting
+  for identified visitors (those with a hutk cookie).
+
+  Debug: add ?debugLuke=1 to the URL or enable in module settings.
 ============================================================================= #}
 
-{% set pz_id = "luke-ai-chat-" ~ name|replace(' ', '-')|replace('.', '-')|lower %}
+{% set pz_id = "luke-ai-cfg-" ~ name|replace(' ', '-')|replace('.', '-')|lower %}
 
 {# === Personalisation: extract contact name if visitor is identified === #}
 {% set visitor_name = contact.firstname|default("") %}
@@ -18,9 +32,7 @@
 {% if visitor_name %}
   {% set greeting = greeting|replace("{name}", visitor_name) %}
 {% else %}
-  {# Strip {name} patterns gracefully for anonymous visitors #}
   {% set greeting = greeting|replace("{name}, ", "")|replace("{name} ", "")|replace("{name}", "") %}
-  {# Also clean up "Hey , " → "Hey, " if name was at start #}
   {% set greeting = greeting|replace("Hey , ", "Hey, ")|replace("Hey  ", "Hey ") %}
 {% endif %}
 
@@ -43,174 +55,26 @@
 <style>
   {% scope_css %}
 
-  /* === Floating Action Button Container === */
-  .luke-ai-wrap {
+  /* Hidden config container — no visual output */
+  .luke-ai-cfg {
     position: fixed;
-    bottom: 24px;
-    right: 24px;
-    z-index: 9999;
-  }
-
-  .luke-fab {
-    position: relative;
-    width: 64px;
-    height: 64px;
-    border-radius: 50%;
-    border: none;
-    background: rgba(0, 0, 0, 0.22);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    cursor: pointer;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow:
-      0 8px 32px rgba(0, 0, 0, 0.45),
-      inset 0 1px 0 rgba(255, 255, 255, 0.10);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.3s ease;
-  }
-
-  .luke-fab:hover {
-    transform: scale(1.08);
-    box-shadow:
-      0 12px 40px rgba(75, 110, 255, 0.3),
-      inset 0 1px 0 rgba(255, 255, 255, 0.14);
-  }
-
-  .luke-fab:active {
-    transform: scale(0.96);
-  }
-
-  .luke-fab:focus-visible {
-    outline: 2px solid #4B6EFF;
-    outline-offset: 3px;
-  }
-
-  /* Animated glow ring behind the button */
-  .luke-fab__ring {
-    position: absolute;
-    inset: -4px;
-    border-radius: 50%;
-    background: conic-gradient(
-      from 0deg,
-      {{ orb_color_1 }},
-      {{ orb_color_2 }},
-      {{ orb_color_1 }}
-    );
-    opacity: 0.6;
+    bottom: 0;
+    right: 0;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+    pointer-events: none;
     z-index: -1;
-    animation: luke-ring-spin 3s linear infinite;
   }
 
-  @keyframes luke-ring-spin {
-    to { transform: rotate(360deg); }
-  }
-
-  /* Pulse glow effect */
-  .luke-fab::before {
-    content: "";
-    position: absolute;
-    inset: -8px;
-    border-radius: 50%;
-    background: radial-gradient(
-      circle,
-      rgba(75, 110, 255, 0.25) 0%,
-      transparent 70%
-    );
-    animation: luke-pulse 2s ease-in-out infinite;
-    pointer-events: none;
-  }
-
-  @keyframes luke-pulse {
-    0%, 100% { transform: scale(1); opacity: 0.5; }
-    50% { transform: scale(1.15); opacity: 0.8; }
-  }
-
-  /* Avatar image */
-  .luke-fab__avatar {
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    object-fit: cover;
-    position: relative;
-    z-index: 1;
-  }
-
-  /* Tooltip (left of button) */
-  .luke-fab__tooltip {
-    position: absolute;
-    right: calc(100% + 12px);
-    top: 50%;
-    transform: translateY(-50%);
-    white-space: nowrap;
-    background: rgba(0, 0, 0, 0.75);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    color: #fff;
-    font-size: 13px;
-    font-weight: 600;
-    padding: 8px 14px;
-    border-radius: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.10);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s ease;
-  }
-
-  .luke-fab:hover .luke-fab__tooltip {
-    opacity: 1;
-  }
-
-  /* Hide glow when widget is active */
-  .luke-fab.is-active .luke-fab__ring,
-  .luke-fab.is-active::before {
-    animation: none;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-  }
-
-  .luke-fab.is-active {
-    opacity: 0.6;
-    transform: scale(0.9);
-  }
-
-  /* === Mobile responsive === */
-  @media (max-width: 767px) {
-    .luke-ai-wrap {
-      bottom: 16px;
-      right: 16px;
-    }
-    .luke-fab {
-      width: 56px;
-      height: 56px;
-    }
-    .luke-fab__avatar {
-      width: 48px;
-      height: 48px;
-    }
-    .luke-fab__tooltip {
-      display: none;
-    }
-  }
-
-  /* === Hide on mobile (if configured) === */
-  {% if not show_on_mobile %}
-  @media (max-width: 767px) {
-    .luke-ai-wrap {
-      display: none !important;
-    }
-  }
-  {% endif %}
-
-  /* === Debug panel === */
+  /* Debug panel */
   .luke-debug {
     display: none;
     position: fixed;
     left: 12px;
     bottom: 12px;
     max-width: 420px;
+    width: calc(100% - 24px);
     padding: 10px;
     border-radius: 12px;
     border: 1px solid rgba(255, 255, 255, 0.14);
@@ -223,6 +87,7 @@
     -webkit-backdrop-filter: blur(8px);
     max-height: 300px;
     overflow: auto;
+    pointer-events: auto;
   }
   .luke-debug.is-on { display: block; }
   .luke-debug pre {
@@ -237,8 +102,9 @@
 {% end_require_css %}
 
 {# ========================= HTML ========================= #}
+{# Hidden config container — the widget gets appended to <body> by JS #}
 <div id="{{ pz_id }}"
-     class="luke-ai-wrap"
+     class="luke-ai-cfg"
      data-agent-id="{{ module.agent_id }}"
      data-avatar-url="{{ luke_image_src }}"
      data-orb-color-1="{{ orb_color_1 }}"
@@ -248,30 +114,10 @@
      data-widget-version="{{ widget_version }}"
      data-visitor-name="{{ visitor_name|e }}"
      data-visitor-email="{{ visitor_email|e }}"
-     aria-label="Luke AI Chat Assistant">
-
-  {# Floating Action Button #}
-  <button type="button"
-          class="luke-fab"
-          data-luke-fab
-          aria-label="{{ module.tooltip_text|default('Talk to Luke') }}"
-          title="{{ module.tooltip_text|default('Talk to Luke') }}">
-    <span class="luke-fab__ring" aria-hidden="true"></span>
-    <img src="{{ luke_image_src }}"
-         alt="Luke - AI Health Assistant"
-         class="luke-fab__avatar"
-         width="56"
-         height="56"
-         loading="lazy" />
-    <span class="luke-fab__tooltip">{{ module.tooltip_text|default("Talk to Luke") }}</span>
-  </button>
-
-  {# ElevenLabs widget will be injected here dynamically by JS #}
-
-  {# Debug panel #}
+     aria-hidden="true">
   <div class="luke-debug" data-debug>
     <strong>[LUKE-AI] Debug</strong>
-    <pre data-debug-log>Waiting for click…</pre>
+    <pre data-debug-log>Waiting for trigger click…</pre>
   </div>
 </div>
 
@@ -279,7 +125,7 @@
 {% require_js position="footer" %}
 <script>
 (function(){
-  /* ── Root element ──────────────────────────────────────── */
+  /* ── Root config element ───────────────────────────────── */
   var root = document.getElementById("{{ pz_id }}");
   if (!root) return;
 
@@ -328,9 +174,21 @@
     widgetEl: null
   };
 
-  /* ── DOM references ────────────────────────────────────── */
-  var fab = root.querySelector("[data-luke-fab]");
-  if (!fab) return;
+  /* ── Find all trigger elements on the page ─────────────── */
+  var triggers = document.querySelectorAll("[data-luke-trigger]");
+
+  if (!triggers.length) {
+    log("No [data-luke-trigger] elements found on page. Module is idle.");
+    return;
+  }
+
+  log("Found " + triggers.length + " trigger(s)", {
+    selectors: Array.prototype.map.call(triggers, function(t) {
+      return t.tagName.toLowerCase() +
+        (t.id ? "#" + t.id : "") +
+        (t.className ? "." + t.className.split(" ")[0] : "");
+    })
+  });
 
   /* ── Lazy-load ElevenLabs widget embed script ──────────── */
   function ensureWidgetScript(callback) {
@@ -395,11 +253,10 @@
       el.setAttribute("dynamic-variables", JSON.stringify(dynVars));
     }
 
-    /* Listen for call events (for future client tools like navigation) */
+    /* Listen for call events (client tool navigation) */
     el.addEventListener("elevenlabs-convai:call", function(evt) {
       log("elevenlabs-convai:call fired", evt.detail);
 
-      /* Handle client tool calls for navigation */
       if (evt.detail && evt.detail.tool_name) {
         var toolName = evt.detail.tool_name;
         if (toolName === "navigateToGetStarted") {
@@ -414,55 +271,71 @@
       }
     });
 
-    /* Listen for open/close to update FAB state */
+    /* Listen for widget open/close — update trigger states */
     el.addEventListener("elevenlabs-convai:open", function() {
-      fab.classList.add("is-active");
       log("Widget opened");
+      triggers.forEach(function(t) { t.setAttribute("data-luke-active", "true"); });
     });
 
     el.addEventListener("elevenlabs-convai:close", function() {
-      fab.classList.remove("is-active");
       log("Widget closed");
+      triggers.forEach(function(t) { t.removeAttribute("data-luke-active"); });
     });
 
-    root.appendChild(el);
+    /* Append to body so it floats independently of page layout */
+    document.body.appendChild(el);
     state.widgetCreated = true;
     state.widgetEl = el;
-    log("Widget element created and appended", {
+    log("Widget element created and appended to body", {
       agentId: CFG.agentId,
       hasName: !!CFG.visitorName,
       voiceEnabled: CFG.enableVoice
     });
   }
 
-  /* ── FAB click handler ─────────────────────────────────── */
-  fab.addEventListener("click", function() {
-    log("FAB clicked");
-
+  /* ── Open Luke's chat ──────────────────────────────────── */
+  function openLuke() {
     if (state.widgetCreated) {
-      /* Widget already exists — toggle it */
-      if (state.widgetEl) {
-        /* Try to programmatically open/close via the widget API */
-        log("Widget already created, re-clicking should toggle via widget UI");
-      }
+      log("Widget already active");
       return;
     }
 
-    /* First click: lazy-load the script, then create widget */
     ensureWidgetScript(function() {
-      /* Short delay for custom element registration */
       setTimeout(function() {
         createWidget();
       }, 150);
     });
+  }
+
+  /* ── Bind click handlers to all triggers ───────────────── */
+  triggers.forEach(function(trigger) {
+    trigger.addEventListener("click", function(e) {
+      /* Prevent default if it's a link */
+      if (trigger.tagName === "A") {
+        e.preventDefault();
+      }
+
+      log("Trigger clicked", {
+        tag: trigger.tagName,
+        id: trigger.id || null,
+        mode: trigger.getAttribute("data-luke-trigger") || "default"
+      });
+
+      openLuke();
+    });
   });
 
+  /* ── Also expose a global function for programmatic use ── */
+  window.PrimalZone = window.PrimalZone || {};
+  window.PrimalZone.openLukeAI = openLuke;
+
   /* ── Init ──────────────────────────────────────────────── */
-  log("Luke AI module initialized", {
+  log("Luke AI module initialized (headless)", {
     agentId: CFG.agentId.slice(0, 12) + "…",
     hasVisitorName: !!CFG.visitorName,
     enableVoice: CFG.enableVoice,
-    widgetVer: CFG.widgetVer
+    widgetVer: CFG.widgetVer,
+    triggerCount: triggers.length
   });
 
 })();
